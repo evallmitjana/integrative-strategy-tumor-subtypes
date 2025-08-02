@@ -1,0 +1,112 @@
+---
+title: "2 Genes y muestras en comun"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+Cargar matrices de metadata obtenidas del paso 1.1
+```{r, message = FALSE, warning = FALSE}
+
+load("metadata_coad.RData")
+load("metadata_colon_v1.RData")
+
+metadata_interes_coad <- data.frame(metadata_interes_coad)
+metadata_interes_colon <- data.frame(metadata_interes_colon)
+
+rownames(metadata_interes_coad) <- metadata_interes_coad$barcode
+metadata_interes_coad$barcode <- NULL
+```
+
+Estratificación de la edad
+```{r, message = FALSE, warning = FALSE}
+
+metadata_interes_coad$edad_diagnostico <- 
+  ifelse(metadata_interes_coad$edad_diagnostico < 100, metadata_interes_coad$edad_diagnostico * 365, metadata_interes_coad$edad_diagnostico)
+metadata_interes_coad$age_temp <- floor(metadata_interes_coad$edad_diagnostico / 365.25)
+metadata_interes_coad$edad_diagnostico <- cut(
+  metadata_interes_coad$age_temp, 
+  breaks = c(19, 29, 39, 49, 59, 69, 79, Inf), 
+  labels = c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"), 
+  right = TRUE
+)
+
+metadata_interes_coad$age_temp <- NULL
+colnames(metadata_interes_colon)[3] <- "edad_diagnostico"
+```
+
+Corregir el resto de las variables
+```{r, message = FALSE, warning = FALSE}
+
+metadata_interes_colon$sexo <- ifelse(metadata_interes_colon$sexo == 1, "male", "female")
+
+rownames(metadata_interes_colon) <-metadata_interes_colon$barcode
+metadata_interes_colon$barcode <- NULL
+metadata_interes_coad$study <- NULL
+metadata_interes_colon$study <- NULL
+metadata_interes_coad$subregion <- NA
+
+metadata_interes_colon$proyecto <- "GTEX-COLON"
+
+metadata_interes_coad$tipo_tejido <- ifelse(metadata_interes_coad$tipo_tejido == "primary tumor", "T", "N")
+metadata_interes_colon$tipo_tejido <- "N"
+
+```
+
+
+Llevar ambas matrices a las mismas columnas para luego unificarlas
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_colon[c("submitter_id","etnicidad", "raza", "vital_status", "tumor_stage", "pathologic_t", "pathologic_n", "morfologia", "is_ffpe")] <- NA
+newOrderColumns <- c("external_id","submitter_id","proyecto", "tipo_tejido","subregion","edad_diagnostico","sexo",
+                     "etnicidad","raza","vital_status","tumor_stage","pathologic_t","pathologic_n","morfologia","is_ffpe")
+
+metadata_interes_coad <- metadata_interes_coad[,newOrderColumns]
+metadata_interes_colon <- metadata_interes_colon[,newOrderColumns]
+
+```
+
+Generar matriz de metadata unificada
+```{r, message = FALSE, warning = FALSE}
+
+metadataCOADunificada <- rbind(metadata_interes_coad,metadata_interes_colon)
+```
+
+Obtener los nombres de la muestras en comun entre las matrices de genes y las de isoformas.
+Para esto, usamos los nombres de muestras obtenidos de la matriz de metadatos (obtenida desde la perspectiva del proceso para genes), junto con las muestras que conforman a las matrices de expresión de isoformas.
+```{r, message = FALSE, warning = FALSE}
+
+#Cargar matrices de expresión de isoformas
+TCGA_COAD_isoData <- as.data.frame(fread("TCGA_COAD_counts.tsv.gz"))
+GTex_Colon_IsoData <- as.data.frame(fread("GTex_Colon_iso.gct", skip = 2))
+
+COAD_isoSamples <- c(colnames(TCGA_COAD_isoData)[-1], colnames(GTex_Colon_IsoData)[-c(1,2)])
+
+samplesGTEX <- intersect(colnames(GTex_Colon_IsoData),rownames(metadataCOADunificada))
+samplesTCGA <- intersect(colnames(TCGA_COAD_isoData), metadataCOADunificada$submitter_id)
+samplesTCGA <- rownames(metadataCOADunificada[metadataCOADunificada$proyecto == "TCGA-COAD",]) 
+
+commonSamples <- c(samplesTCGA,samplesGTEX) #MUESTRAS EN COMUN
+```
+
+Con las muestras en comun, filtramos la metadata unificada
+```{r, message = FALSE, warning = FALSE}
+
+metadataCOADunificada <- metadataCOADunificada[commonSamples,]
+save(metadataCOADunificada, file = "metadataCOADunificada.RData")
+```
+
+-----------
+Obtener los genes en comun entre matrices de genes e isoformas
+```{r, message = FALSE, warning = FALSE}
+
+load("genes_recount.RData") # Genes obtenidos del paso 1.1
+load("genesFromIso.RData")  # Genes obtenidos del paso 1.2
+
+#Encontrar los genes en comun entre la matriz de expresión de genes y la matriz de expresión de isoformas
+commonGenesCOAD <- intersect(genes_recount_coad, genesFromIso) # GENES EN COMUN
+save(commonGenesCOAD, file="commonGenesCOAD.RData")
+
+```
