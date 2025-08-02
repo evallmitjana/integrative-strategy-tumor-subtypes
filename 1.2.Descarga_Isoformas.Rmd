@@ -1,0 +1,111 @@
+---
+title: "1.2 Descarga de matrices de expresión de isoformas"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Descargamos archivos de [GTEx Portal](https://gtexportal.org/home/downloads/adult-gtex/metadata) Este repositorio nos aporta datos de tejido normal.
+
+- Metadatos: *GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt*
+- Conteo esperado de los transriptos: *GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_expected_count.gct.gz*
+
+Leemos la matriz de metadatos:
+```{r eval = FALSE}
+library(data.table)
+metadataFile_GTEx <- "GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt"
+metadata_GTEx <- read.csv(metadataFile_GTEx, sep="\t", header=TRUE)
+```
+
+La matriz de metadatos posee información de muchos tejidos. Filtramos la matriz para obtener sólo la metadata de las muestras provenientes de tejido de colon.
+
+```{r eval = FALSE}
+metadata_GTEx <- metadata_GTEx[metadata_GTEx$SMTS == "Colon", ]
+colon_samples <- metadata_GTEx$SAMPID
+```
+
+El archivo que contiene la expresión de los transcriptos, es muy grande como para leerlo en memoria (debido a que contiene información de varios tejidos).
+Procedemos a leer el archivo linea por linea, filtrando por tejido, para obtener un nuevo archivo con los datos que nos interesan.
+
+```{r eval = FALSE}
+input_filename <- "GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_expected_count.gct.gz"
+output_filename <- "GTex_Colon_iso.gct"
+
+input_file <- file(input_filename, open = "r")
+output_file <- file(output_filename, open = "w")
+header <- readLines(input_file, n = 2) #primeras dos lineas (cabecera y dimensiones)
+writeLines(header, output_file)
+
+samples <- readLines(input_file, n = 1)  # Nombres de las muestras
+samples <- unlist(strsplit(samples, "\t"))  # Dividir la línea en columnas
+```
+
+Utilizamos los nombres de las muestras de colon de la matriz de metadata para filtrar en la matriz de expresión, conservando las columnas 1 y 2 ya que poseen los nombres de transcripto y gen.
+
+```{r eval = FALSE}
+idx_colon <- which(samples %in% colon_samples)
+writeLines(paste(samples[c(1, 2, idx_colon)], collapse = "\t"), output_file)
+while (length(line <- readLines(input_file, n = 1)) > 0) {
+  values <- unlist(strsplit(line, "\t"))
+  writeLines(paste(values[c(1, 2, idx_colon)], collapse = "\t"), output_file)
+}
+close(input_file)
+close(output_file)
+```
+
+Finalmente logramos obtener un archivo *GTex_Colon_iso.gct* con los conteos esperados de los transcriptos, para tejido normal de colon.
+
+-----
+
+Obtener genes asociados a las isoformas en comun entre las matrices de gtex y tcga
+```{r eval = FALSE}
+TCGA_COAD_isoData <- as.data.frame(fread("TCGA_COAD_counts.tsv.gz"))
+GTex_Colon_IsoData <- as.data.frame(fread("GTex_Colon_iso.gct", skip = 2))
+
+#Borrar filas con la cadena _PAR_Y en los id de genes y transcriptos
+GTex_Colon_IsoData <- GTex_Colon_IsoData[
+  !grepl("_PAR_Y$", GTex_Colon_IsoData$transcript_id) 
+  & !grepl("_PAR_Y$", GTex_Colon_IsoData$gene_id), ]
+
+# Separar la columna V1 por el delimitador "|"
+TCGA_V1 <- do.call(rbind, strsplit(TCGA_COAD_isoData$V1, "\\|"))
+
+# Agregar columnas transcript_id y gene_id
+TCGA_COAD_isoData$transcript_id <- TCGA_V1[, 1]
+TCGA_COAD_isoData$gene_id <- TCGA_V1[, 2]
+newCols <- c("transcript_id", "gene_id", 
+             setdiff(names(TCGA_COAD_isoData), c("V1", "transcript_id", "gene_id")))
+TCGA_COAD_isoData <- TCGA_COAD_isoData[, newCols]
+
+#Quitar numero de versión
+GTex_Colon_IsoData$transcript_id <- sub("\\.[0-9]+$", "", GTex_Colon_IsoData$transcript_id)
+GTex_Colon_IsoData$gene_id <- sub("\\.[0-9]+$", "", GTex_Colon_IsoData$gene_id)
+TCGA_COAD_isoData$transcript_id <- sub("\\.[0-9]+$", "", TCGA_COAD_isoData$transcript_id)
+TCGA_COAD_isoData$gene_id <- sub("\\.[0-9]+$", "", TCGA_COAD_isoData$gene_id)
+
+#formatear y renombrar filas
+rownames(GTex_Colon_IsoData) <- paste(
+  GTex_Colon_IsoData$transcript_id, GTex_Colon_IsoData$gene_id, sep = "|")
+rownames(TCGA_COAD_isoData) <- paste(
+  TCGA_COAD_isoData$transcript_id, TCGA_COAD_isoData$gene_id, sep = "|")
+
+#eliminar isoformas no expresadas
+TCGA_COAD_isoData <- TCGA_COAD_isoData[rowSums(TCGA_COAD_isoData[,3:548]) > 0, ]
+GTex_Colon_IsoData <- GTex_Colon_IsoData[rowSums(GTex_Colon_IsoData[,3:781]) > 0, ]
+
+#Obtener las filas en comun de ambas matrices de GTEX y TCGA
+commonTranscripts <- intersect(rownames(GTex_Colon_IsoData), rownames(TCGA_COAD_isoData))
+
+#acotar a transcriptos en comun entre tcga y gtex
+TCGA_COAD_isoData <- TCGA_COAD_isoData[commonTranscripts,]
+GTex_Colon_IsoData <- GTex_Colon_IsoData[commonTranscripts,]
+
+#Obtener los genes correspondientes
+genesFromIso <- unique(sub(".*\\|", "", commonTranscripts))
+
+#Guardamos los genes en comun de las isoformas
+save(genesFromIso, file = "genesFromIso.RData")
+```
