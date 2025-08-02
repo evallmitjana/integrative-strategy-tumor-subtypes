@@ -1,0 +1,324 @@
+---
+title: "1.1 Descarga de matrices de expresión de genes"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(recount3)
+library(stringr)
+```
+
+
+## 1. Descarga de datos TCGA y GTEx
+
+```{r, message = FALSE, warning = FALSE}
+
+# Proyectos de interés
+proyectos_crc <- c("coad", "colon")
+
+# Crear objetos *_raw y sus copias sin _raw
+for (i in seq_along(proyectos_crc)) {
+  nombre <- proyectos_crc[i]
+  nombre_raw <- paste0("rse_gene_", nombre, "_raw")
+  nombre_final <- paste0("rse_gene_", nombre)
+
+  # Crear el objeto *_raw
+  rse_obj <- recount3::available_projects(organism = "human") %>%
+    filter(file_source %in% c("tcga", "gtex"), project == toupper(nombre)) %>%
+    recount3::create_rse()
+
+  # Asignar ambas versiones
+  assign(nombre_raw, rse_obj)
+  assign(nombre_final, rse_obj)
+}
+
+# Limpiar variables auxiliares
+rm(proyectos_crc, i, nombre, nombre_raw, nombre_final, rse_obj)
+
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+dim(rse_gene_coad)
+dim(rse_gene_colon)
+```
+
+eliminación de duplicados por genes Y
+```{r, message = FALSE, warning = FALSE}
+## 2. Paso 1: Eliminación de duplicados
+
+# Filtrar genes que NO contienen "_PAR_Y" en COAD y COLON
+rse_gene_coad <- rse_gene_coad[!grepl("_PAR_Y", rownames(rse_gene_coad)), ]
+rse_gene_colon <- rse_gene_colon[!grepl("_PAR_Y", rownames(rse_gene_colon)), ]
+
+# Ver dimensiones resultantes
+dim(rse_gene_coad)
+dim(rse_gene_colon)
+```
+
+
+detectar duplicados en las muestras
+```{r, message = FALSE, warning = FALSE}
+cat("Duplicados en COAD (tcga_barcode): ", 
+    sum(duplicated(colData(rse_gene_coad)$`tcga.tcga_barcode`)), "\n")
+
+cat("Duplicados en COLON (gtex.sampid): ", 
+    sum(duplicated(colData(rse_gene_colon)$`gtex.sampid`)), "\n")
+```
+
+
+
+```{r, message = FALSE, warning = FALSE}
+# Identificar duplicados por tcga.tcga_barcode o gtex.sampid y quedarse con la de menor total_reads
+df_duplicados <- list()
+
+if (sum(duplicated(colData(rse_gene_coad)$`tcga.tcga_barcode`)) > 0) {
+  df_duplicados$coad <- tibble(
+    external_id = colnames(rse_gene_coad),
+    sample_id = colData(rse_gene_coad)$`tcga.tcga_barcode`
+  ) %>%
+    group_by(sample_id) %>%
+    filter(n() > 1) %>%
+    ungroup() %>%
+    mutate(
+      total_reads = colSums(recount3::compute_read_counts(rse_gene_coad)[, external_id])
+    )
+}
+
+if (sum(duplicated(colData(rse_gene_colon)$`gtex.sampid`)) > 0) {
+  df_duplicados$colon <- tibble(
+    external_id = colnames(rse_gene_colon),
+    sample_id = colData(rse_gene_colon)$`gtex.sampid`
+  ) %>%
+    group_by(sample_id) %>%
+    filter(n() > 1) %>%
+    ungroup() %>%
+    mutate(
+      total_reads = colSums(recount3::compute_read_counts(rse_gene_colon)[, external_id])
+    )
+}
+
+if (length(df_duplicados) > 0) {
+  df_duplicados <- bind_rows(df_duplicados, .id = "proyecto")
+}
+
+# Seleccionar duplicados que NO son la muestra con más reads (para eliminar)
+external_ids_a_eliminar <- df_duplicados %>%
+  group_by(sample_id) %>%
+  arrange(desc(total_reads)) %>%
+  mutate(rn = row_number()) %>%
+  filter(rn > 1) %>%
+  pull(external_id)
+
+# Eliminar columnas duplicadas
+rse_gene_coad <- rse_gene_coad[, !colnames(rse_gene_coad) %in% external_ids_a_eliminar]
+rse_gene_colon <- rse_gene_colon[, !colnames(rse_gene_colon) %in% external_ids_a_eliminar]
+
+# Dimensiones finales
+dim(rse_gene_coad)
+dim(rse_gene_colon)
+```
+
+
+creación de metadatos COAD
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_coad <- SummarizedExperiment::colData(rse_gene_coad) %>%
+  tibble::as_tibble() %>%
+  dplyr::transmute(
+    external_id = external_id,
+    barcode = `tcga.tcga_barcode`,
+    submitter_id = `tcga.gdc_submitter_id`,
+    proyecto = `tcga.gdc_cases.project.project_id`,
+    study = study,
+    
+    tipo_tejido = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.samples.sample_type`,
+        `tcga.cgc_sample_sample_type`
+      )),
+      "not reported"
+    ),
+    sexo = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.demographic.gender`,
+        `tcga.cgc_case_gender`
+      )),
+      "not reported"
+    ),
+    etnicidad = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.demographic.ethnicity`,
+        `tcga.cgc_case_ethnicity`,
+        `tcga.xml_ethnicity`
+      )),
+      "not reported"
+    ),
+    raza = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.demographic.race`,
+        `tcga.cgc_case_race`,
+        `tcga.xml_race_list`
+      )),
+      "not reported"
+    ),
+    vital_status = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.diagnoses.vital_status`,
+        `tcga.cgc_case_vital_status`,
+        `tcga.xml_vital_status`
+      )),
+      "not reported"
+    ),
+    edad_diagnostico = dplyr::coalesce(
+      `tcga.gdc_cases.diagnoses.age_at_diagnosis`,
+      `tcga.cgc_case_age_at_diagnosis`
+    ),
+    tumor_stage = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        `tcga.gdc_cases.diagnoses.tumor_stage`,
+        `tcga.cgc_case_pathologic_stage`,
+        `tcga.xml_stage_event_pathologic_stage`
+      )),
+      "not reported"
+    ),
+    is_ffpe = dplyr::na_if(
+      tolower(dplyr::coalesce(
+        as.character(`tcga.gdc_cases.samples.is_ffpe`),
+        as.character(`tcga.cgc_sample_is_ffpe`)
+      )),
+      "not reported"
+    ),
+
+    
+    # nuevos campos agregados sin coalesce
+    tnm_categorias = `tcga.xml_stage_event_tnm_categories`,
+    pathologic_t = `tcga.cgc_case_pathologic_t`,
+    pathologic_n = `tcga.cgc_case_pathologic_n`,
+    morfologia = `tcga.gdc_cases.diagnoses.morphology`
+  )
+```
+
+
+filtrado de metadatos incompletos o sesgados
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_coad <- metadata_interes_coad %>%
+  dplyr::filter(
+    !is.na(tipo_tejido),
+    !is.na(sexo),
+    !is.na(vital_status),
+    !is.na(edad_diagnostico),
+    !is.na(tumor_stage),
+    is_ffpe != "true", # se agrega por sesgo
+    is_ffpe != TRUE
+  )
+
+```
+
+
+completar campos patológicos desde tnm_categorias
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_coad <- metadata_interes_coad %>%
+  dplyr::mutate(
+    pathologic_t = dplyr::if_else(
+      is.na(pathologic_t) & !is.na(tnm_categorias),
+      stringr::str_extract(tnm_categorias, "T[^N]+"),
+      pathologic_t
+    ),
+    pathologic_n = dplyr::if_else(
+      is.na(pathologic_n) & !is.na(tnm_categorias),
+      stringr::str_extract(tnm_categorias, "N[^M]+"),
+      pathologic_n
+    )
+  ) %>%
+  dplyr::select(-tnm_categorias)
+```
+
+diagnóstico de NA por fila
+(Cuenta cuántos valores NA tiene cada fila, y agrupa por esa cantidad para ver distribución de metadatos incompletos -opcional analisis-) 
+
+metadata_interes_coad %>%
+  dplyr::mutate(cantidad_na = apply(., 1, function(row) sum(is.na(row)))) %>%
+  dplyr::count(cantidad_na, sort = TRUE)
+  
+  
+metadata_interes_coad %>%
+  dplyr::mutate(cantidad_na = apply(., 1, function(row) sum(is.na(row)))) %>%
+  dplyr::filter(cantidad_na == 2) #o los que salgan 2 o 1 o 3....
+
+
+excluir muestras metastásicas o recurrentes
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_coad <- metadata_interes_coad %>%
+  dplyr::filter(
+    !grepl("metastatic|recurrent tumor", tipo_tejido, ignore.case = TRUE)
+  )
+
+table(metadata_interes_coad$tipo_tejido)
+```
+
+
+
+creación de metadatos para GTEx Colon
+```{r, message = FALSE, warning = FALSE}
+metadata_interes_colon <- SummarizedExperiment::colData(rse_gene_colon) %>%
+  tibble::as_tibble() %>%
+  dplyr::select(
+    external_id,
+    barcode = `gtex.sampid`,
+    study,
+    sexo= `gtex.sex`,
+    edad= `gtex.age`,
+    subregion = `gtex.smtsd`
+  ) %>%
+  dplyr::mutate(
+    subregion = stringr::str_replace(subregion, "Colon - ", ""),
+    subregion = stringr::str_replace_all(subregion, "\\s+", "")
+  )
+```
+
+
+filtrar genes con al menos una lectura: Elimina genes con 0 reads totales en todas las muestras.
+```{r, message = FALSE, warning = FALSE}
+rse_gene_coad <- rse_gene_coad[
+  rowSums(recount3::compute_read_counts(rse_gene_coad)) > 0, 
+]
+
+rse_gene_colon <- rse_gene_colon[
+  rowSums(recount3::compute_read_counts(rse_gene_colon)) > 0, 
+]
+
+dim(rse_gene_coad)
+dim(rse_gene_colon)
+```
+
+detección de genes duplicados (sin versión): Identifica genes con nombres duplicados ignorando la versión (ENSG00000... .1 → ENSG00000...).
+```{r, message = FALSE, warning = FALSE}
+rownames(rse_gene_coad) %>%
+  sub("\\..*", "", .) %>%
+  {\(x) unique(x[duplicated(x)])}()
+
+rownames(rse_gene_colon) %>%
+  sub("\\..*", "", .) %>%
+  {\(x) unique(x[duplicated(x)])}()
+```
+
+intersección de genes comunes: Obtiene los genes que están presentes en ambos datasets (COAD y Colon) sin considerar la versión del gen.
+```{r, message = FALSE, warning = FALSE}
+genes_recount <- intersect(
+    rownames(rse_gene_coad) %>% sub("\\..*", "", .),
+    rownames(rse_gene_colon) %>% sub("\\..*", "", .)
+)
+```
+
+guardar metadatos, matrices de gtenes y genes comunes:
+```{r, message = FALSE, warning = FALSE}
+
+getwd()         # muestra la carpeta actual
+save(metadata_interes_coad, file = "metadata_coad.RData")
+save(metadata_interes_colon, file = "metadata_colon.RData")
+save(rse_gene_coad, rse_gene_colon, file = "genMatrix.RData")
+save(genes_recount, file = "genes_recount.RData")
+```
