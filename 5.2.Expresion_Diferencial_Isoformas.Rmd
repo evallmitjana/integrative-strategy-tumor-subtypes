@@ -1,0 +1,105 @@
+---
+title: "5.2 Genes con splicing diferencial"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+load("geneIso_f.RData") #Obtenido en el paso 4.1
+load("corrected_iso_counts.RData") #Obtenida en el paso 4.2
+load("metadataCOADunificada.RData") #Obtenida en el paso 2
+
+#verificar orden
+table(colnames(corrected_iso_counts) == rownames(metadataCOADunificada)) #TRUE
+
+colnames(geneIso_f) <- c("gene_id","isoform_id")
+rownames(geneIso_f) <- geneIso_f$isoform_id
+
+#verificar orden
+table(geneIso_f$isoform_id == rownames(corrected_iso_counts)) #TRUE
+
+designMatrix<-data.frame(
+  sample=factor(rownames(metadataCOADunificada), levels=rownames(metadataCOADunificada)),
+  condition= factor(metadataCOADunificada$tipo_tejido, levels=c("N","T"))
+)
+rownames(designMatrix)<-designMatrix[,"sample"]
+
+```
+
+Criterio de filtro:
+Eliminamos los genes que tienen solo una isoforma ya que la expresión diferencial de genes la evaluaremos con edgeR
+```{r, message = FALSE, warning = FALSE}
+library(NBSplice)
+library(dplyr)
+
+geneIso_f %>%
+  group_by(gene_id) %>%
+  # contar numero de isoformas por gen
+  summarise(n = n()) %>%
+  # mantener los genes que tienen mas de una
+  filter(n >1) %>% 
+  pull(gene_id) -> genes_multi_iso
+
+
+length(genes_multi_iso) 
+
+# filtrar la matriz de relaciones genes - isoformas para conservar los genes seleccionados
+geneIso_f %>%
+  filter(gene_id %in% genes_multi_iso) -> geneIso_f_mi
+
+dim(geneIso_f_mi)
+# [1] 154739 isoforms
+
+# filtrar la matriz de conteo de las isoformas para conservar los genes seleccionados
+corrected_iso_counts_fmi <- corrected_iso_counts[geneIso_f_mi$isoform_id,]
+```
+
+Generar el isoDataSet e identificar las isoformas de baja expresión
+```{r, message = FALSE, warning = FALSE}
+
+myIsoDataSet<-IsoDataSet(corrected_iso_counts_fmi, designMatrix, "condition",
+                         geneIso_f_mi, BPPARAM = MulticoreParam(workers = 2))
+
+myIsoDataSet <- buildLowExpIdx(myIsoDataSet, "condition", ratioThres = 0.01, countThres = 1)
+
+length(myIsoDataSet@lowExpIndex) # cantidad de isoformas de baja expresion detectadas
+
+```
+
+Expresión diferencial: Filtrar los genes con splicing diferencial
+```{r, message = FALSE, warning = FALSE}
+
+myDSResults <- NBTest(myIsoDataSet, colName = "condition", test = "F")
+
+dsRes <- GetDSResults(myDSResults)
+dsRes <- dsRes[dsRes$geneFDR < 0.05,]
+
+dsRes$absChange <- abs(dsRes$ratio_N - dsRes$ratio_T)
+dsRes <- dsRes[dsRes$absChange > 0.05,]
+
+DSG_iso <- as.data.frame(cbind(dsRes$gene,dsRes$iso))
+colnames(DSG_iso) <- c("gene","iso")
+
+```
+
+Guardar la matriz reducida a los DSG encontrados
+```{r, message = FALSE, warning = FALSE}
+load("corrected_iso_counts.RData")
+isoData_DSG <- corrected_iso_counts[rownames(corrected_iso_counts) %in% DSG_iso$iso,]
+dim(isoData_DSG)
+save(isoData_DSG, DSG_iso, file = "isoData_DSG.RData")
+```
+
+Guardar la matriz de isoformas en com con el filtrado de multi-iso
+```{r, message = FALSE, warning = FALSE}
+corrected_iso_counts_fmi_cpm <- isoCounts(myIsoDataSet)
+save(corrected_iso_counts_fmi_cpm, file = "isoData_f_cpm.RData") #Necesaria para clustering
+
+```
+

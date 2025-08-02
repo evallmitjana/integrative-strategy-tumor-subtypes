@@ -1,0 +1,106 @@
+---
+title: "5.1 Expresion Diferencial en Genes (DEG)"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(dplyr)
+# library(recount3)
+library(stringr)
+library(tibble)
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+
+metadata<-get(load("metadataCOADunificada.Rdata")) #Obtenida del paso 2
+load("corrected_gene_counts.RData") #Obtenida del paso 4.2
+
+```
+
+```{r, message = FALSE, warning = FALSE}
+dim(corrected_gene_counts)
+
+
+```
+Creación de DGEList + Filtrado
+
+<!-- summary(colSums(corrected_gene_counts)) -->
+<!-- table(metadata$tipo_tejido) -->
+<!-- table(metadata$proyecto, metadata$tipo_tejido) -->
+<!-- floor(median(colSums(corrected_gene_counts))/10^6) -->
+
+```{r, message = FALSE, warning = FALSE}
+dge <- edgeR::DGEList(counts = corrected_gene_counts)
+
+keep <- edgeR::filterByExpr(
+  dge,
+  group = metadata$tipo_tejido,
+  min.count = floor(median(colSums(corrected_gene_counts))/10^6),
+  large.n = 25,
+  min.prop = 0.1
+)
+
+dge_filtrado <- dge[keep, , keep.lib.sizes = FALSE]
+
+cat("Genes retenidos:", sum(keep), "de", length(keep), "\n")
+
+```
+
+Creación de DGEList + Filtrado
+```{r, message = FALSE, warning = FALSE}
+genes_filterByExpr<-rownames(dge_filtrado)
+#save(genes_filterByExpr, file = "lista_genes_filterbyexpr.RData")
+```
+
+ Calcular factores de normalización (TMM)
+```{r, message = FALSE, warning = FALSE}
+dge_filtrado_tmm <- edgeR::calcNormFactors(dge_filtrado, method = "TMM")
+```
+
+Definir matriz de diseño
+
+```{r, message = FALSE, warning = FALSE}
+# convertir a factor
+metadata$tipo_tejido <- factor(metadata$tipo_tejido)
+design <- model.matrix(~ tipo_tejido, data = metadata)
+# lo mismo que design <- model.matrix(~ metadata$tipo_tejido)
+```
+
+Estimar dispersión
+```{r, message = FALSE, warning = FALSE}
+dge_filtrado_tmm <- edgeR::estimateDisp(dge_filtrado_tmm, design)
+```
+
+Ajustar modelo lineal y hacer el test (LRT)
+```{r, message = FALSE, warning = FALSE}
+fit <- edgeR::glmFit(dge_filtrado_tmm, design)
+lrt <- edgeR::glmLRT(fit)
+```
+Obtener resultados ordenados por FDR
+```{r, message = FALSE, warning = FALSE}
+res <- edgeR::topTags(lrt, n = nrow(dge_filtrado$counts), adjust.method = "fdr")[[1]]
+```
+
+Filtrar por FDR y logFC
+```{r, message = FALSE, warning = FALSE}
+res$AbslogFC <- abs(res$logFC)
+
+res_signif <- res[res$FDR < 0.01 & res$AbslogFC > 2, ] # se cambia abs por 2 por cantidad muestras, objetivo que de aprox 2000
+
+dim(res_signif)
+```
+
+
+Guardar la matriz de genes filtrada por los diferencialmente expresados
+```{r, message = FALSE, warning = FALSE}
+
+gen_data_deg<-corrected_gene_counts[rownames(res_signif),]
+dim(gen_data_deg)
+save(gen_data_deg, file = "gen_data_deg_raw.Rdata")
+```
+
+

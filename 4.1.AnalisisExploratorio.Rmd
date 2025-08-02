@@ -1,0 +1,302 @@
+---
+title: "4.1 Análisis exploratorio de matrices de expresión"
+author: "GM"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+# html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(future)
+
+```
+
+```{r, include = FALSE}
+plan("multicore", workers = 6)
+options(future.globals.maxSize = 110 * 1024 ^ 3) # for 110 Gb RAM
+```
+
+```{r}
+# load previously saved object, just for compiling
+load('geneExp_filt_counts.RData')
+load('isoData_filt_counts.RData')
+load('geneIso_f.RData')
+load('metadataCOADunificada.RData')
+load('pca_res_gene.RData')
+load('pca_res_iso.RData')
+
+```
+Carga de las matrices de expresión
+
+```{r, eval = TRUE}
+load('gene_counts.RData')
+gene_counts_v1 <- gene_counts
+```
+
+```{r}
+head(gene_counts_v1[,1:4])
+```
+
+Matriz de expresión de transcritos
+
+```{r, eval = TRUE}
+load('COAD_isoData_unificada.RData')
+```
+
+```{r}
+head(COAD_isoData[,1:4])
+```
+
+Matriz de relación gen-transcrito
+
+```{r, eval = TRUE}
+geneIso <- data.frame(gene_id = str_split(rownames(COAD_isoData),
+                                          '[|]', simplify = TRUE)[,2],
+                      transcript_id = str_split(rownames(COAD_isoData),
+                                                '[|]', simplify = TRUE)[,1])
+```
+
+```{r, eval = FALSE}
+rownames(COAD_isoData) <- geneIso$transcript_id
+```
+
+Carga de la matriz de metadata de las muestras
+
+```{r, eval = FALSE}
+load('metadataCOADunificada.RData')
+```
+
+```{r}
+head(metadataCOADunificada)
+```
+
+Identificación de las muestras que están representadas en las matrices de
+expresión
+
+```{r}
+table(colnames(COAD_isoData) %in% colnames(gene_counts_v1))
+```
+
+```{r}
+table(colnames(gene_counts_v1) %in% colnames(COAD_isoData))
+```
+
+Comparar genes y transcriptos para verificar que estén representados en ambas matrices de expresión
+
+```{r}
+table(rownames(gene_counts_v1) %in% unique(geneIso$gene_id))
+```
+
+```{r}
+table( unique(geneIso$gene_id) %in% rownames(gene_counts_v1))
+```
+
+Explorando la matriz de metadatos
+
+```{r}
+metadataCOADunificada %>%
+  group_by(proyecto, tipo_tejido, sexo) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = tipo_tejido, y = n, fill = sexo)) +
+  geom_bar(stat = 'identity', position = position_dodge2()) +
+  facet_grid(~proyecto, scales = 'free_x',space = 'free_x') +
+  theme_bw()
+```
+
+
+
+```{r}
+gene_counts_v1 %>%
+  as.data.frame() %>%
+  summarise(across(everything(), mean, na.rm = TRUE)) %>%
+  pivot_longer(everything(), names_to = "sample", 
+               values_to = "meanGeneExpression") %>%
+  left_join(COAD_isoData %>%
+              summarise(across(everything(), mean, na.rm = TRUE)) %>%
+              pivot_longer(everything(), names_to = "sample", 
+               values_to = "meanIsoExpression")) %>%
+  as.data.frame() %>%
+  left_join(metadataCOADunificada %>%
+              mutate(sample = rownames(metadataCOADunificada)) %>%
+              select(sample, proyecto, tipo_tejido, sexo)) -> df
+
+```
+
+```{r}
+df %>%
+  ggplot(aes(x = tipo_tejido, y = meanIsoExpression, color = sexo)) +
+  geom_boxplot() +
+  facet_grid(~proyecto ) +
+  theme_bw()
+```
+
+```{r}
+df %>%
+  ggplot(aes(x = tipo_tejido, y = meanGeneExpression, color = sexo)) +
+  geom_boxplot() +
+  facet_grid(~proyecto ) +
+  theme_bw()
+```
+
+En escala log2
+
+```{r}
+
+df %>%
+  ggplot(aes(x = tipo_tejido, y = log2(meanGeneExpression), color = sexo)) +
+  geom_boxplot() +
+  facet_grid(~proyecto) +
+  theme_bw()
+```
+
+```{r}
+
+df %>%
+  ggplot(aes(x = tipo_tejido, y = log2(meanIsoExpression), color = sexo)) +
+  geom_boxplot() +
+  facet_grid(~proyecto ) +
+  theme_bw()
+```
+
+Filtrado de genes e isoformas
+Filtrado de genes e isoformas
+
+- Antes que nada vamos a redondear los isoform counts
+
+```{r, eval = FALSE}
+COAD_isoData <- round(COAD_isoData) 
+```
+
+- Vamos a eliminar los genes que tienen 0 expresion en el 90% o mas de las muestras
+
+```{r, eval = FALSE}
+geneExp_filt_counts <- gene_counts_v1[ rowSums(gene_counts_v1 == 0) < round(0.9*ncol(gene_counts_v1)),]
+dim(geneExp_filt_counts)
+```
+
+- Eliminamos las isoformas asociadas a esos genes y las que tienen 0 counts en todas las muestras
+
+```{r, eval = FALSE}
+COAD_isoData %>% 
+  filter(rownames(COAD_isoData) %in% geneIso[geneIso$gene_id %in% rownames(geneExp_filt_counts),'transcript_id'])-> isoData_filt_counts
+isoData_filt_counts[rowSums(isoData_filt_counts) > 0,] -> isoData_filt_counts
+dim(isoData_filt_counts)
+```
+
+Actualizamos la gene_iso matrix y si es necesario la matriz de genes para eliminar genes que ya no tienen expresion en la matriz de isoformas
+
+```{r, eval = FALSE}
+geneIso_f <- geneIso[geneIso$transcript_id %in% rownames(isoData_filt_counts),]
+geneExp_filt_counts <- geneExp_filt_counts[unique(geneIso_f$gene_id),]
+save(geneIso_f, file ="geneIso_f.RData")
+```
+
+```{r}
+dim(geneExp_filt_counts)
+```
+
+```{r cleaning space, echo = FALSE, eval = FALSE}
+rm(geneIso)
+rm(COAD_isoData)
+rm(gene_counts_v1)
+gc()
+```
+
+```{r, eval = FALSE}
+tpm_gene_matrix <- apply(geneExp_filt_counts, 2, function(x) (x / sum(x)) * 1e6)  
+data_pca_gene <- log2(tpm_gene_matrix + 1)  # Log-transformar
+```
+
+
+```{r, eval = FALSE}
+tpm_iso_matrix <- apply(isoData_filt_counts, 2, function(x) (x / sum(x)) * 1e6)  
+data_pca_iso<- log2(tpm_iso_matrix + 1)  # Log-transformar
+```
+
+
+```{r, eval = FALSE}
+pca_res_gene <- prcomp(t(data_pca_gene), scale. = TRUE)  # Transponer para que muestras sean filas
+
+```
+
+```{r, eval = FALSE}
+pca_res_iso <- prcomp(t(data_pca_iso), scale. = TRUE)  # Transponer para que muestras sean filas
+
+```
+
+```{r, echo= FALSE, eval = FALSE}
+rm(tpm_gene_matrix)
+rm(tpm_iso_matrix)
+rm(data_pca_gene)
+rm(data_pca_iso)
+gc()
+```
+
+```{r}
+pca_df <- data.frame(PC1 = pca_res_gene$x[,1], 
+                     PC2 = pca_res_gene$x[,2], 
+                     proyecto = metadataCOADunificada$proyecto,
+                     condicion = metadataCOADunificada$tipo_tejido,
+                     sexo = metadataCOADunificada$sexo)
+
+ggplot(pca_df %>%
+         mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = proyecto)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```
+
+
+```{r}
+ggplot(pca_df %>%
+         mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = sexo)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```
+
+
+```{r}
+pca_iso_df <- data.frame(PC1 = pca_res_iso$x[,1], 
+                     PC2 = pca_res_iso$x[,2], 
+                     proyecto = metadataCOADunificada$proyecto,
+                     condicion = metadataCOADunificada$tipo_tejido,
+                     sexo = metadataCOADunificada$sexo)
+
+ggplot(pca_iso_df %>%
+       mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = proyecto)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```
+
+
+```{r}
+ggplot(pca_iso_df %>%
+
+         mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = sexo)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```

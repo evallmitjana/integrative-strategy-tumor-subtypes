@@ -1,0 +1,45 @@
+---
+title: "3.2 Unificacion de Matrices de Isoformas"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Unificar matriz de isoformas para que se corresponda con los genes en comun y con las muestras de la metadata unificada
+```{r, message = FALSE, warning = FALSE}
+load("metadataCOADunificada.RData")
+load("commonGenesCOAD.RData")
+
+TCGA_COAD_isoData <- as.data.frame(fread("TCGA_COAD_counts.tsv.gz"))
+GTex_Colon_IsoData <- as.data.frame(fread("GTex_Colon_iso.gct", skip = 2))
+
+#filtrar los commonTranscripts para quedarme con las isoformas de los genes en comun
+TCGA_COAD_isoData <- TCGA_COAD_isoData[TCGA_COAD_isoData$gene_id %in% commonGenesCOAD,]
+GTex_Colon_IsoData <- GTex_Colon_IsoData[GTex_Colon_IsoData$gene_id %in% commonGenesCOAD,]
+
+#renombrar muestras de tcga de submitter_id a barcode
+TCGA_COAD_Samples <- intersect(colnames(TCGA_COAD_isoData), metadataCOADunificada$submitter_id)
+TCGA_COAD_isoData <- TCGA_COAD_isoData[, TCGA_COAD_Samples, drop = FALSE]
+submitter_to_barcode <- setNames(rownames(metadataCOADunificada), metadataCOADunificada$submitter_id)
+colnames(TCGA_COAD_isoData) <- submitter_to_barcode[colnames(TCGA_COAD_isoData)]
+
+GTex_Colon_IsoData[,1:2]<-NULL #son columnas con info de iso y gen, no son muestras
+
+#unir matrices
+COAD_isoData <- cbind(TCGA_COAD_isoData,GTex_Colon_IsoData)
+
+#filtrar muestras
+COAD_isoData <- COAD_isoData[,rownames(metadataCOADunificada)] #MATRIZ DE ISOFORMAS UNIFICADA
+
+#guardar
+save(COAD_isoData, file = "COAD_isoData_unificada.RData")
+
+
+#VERIFICACION DE GENES
+genesFromIso_verificacion <- unique(sub(".*\\|", "", rownames(COAD_isoData)))
+verificacion <- intersect(genesFromIso_verificacion,commonGenesCOAD_17052025)
+
+```

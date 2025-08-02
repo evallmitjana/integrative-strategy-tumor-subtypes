@@ -1,0 +1,141 @@
+---
+title: "4.2 Correccion del efecto de batch"
+author: "GM"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+# html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(future)
+library(sva)
+library(DESeq2)
+```
+
+```{r, include = FALSE}
+plan("multicore", workers = 4)
+options(future.globals.maxSize = 80 * 1024 ^ 3) # for 50 Gb RAM
+```
+
+
+```{r, echo = FALSE, eval = TRUE}
+load('geneExp_filt_counts.RData')
+load('isoData_filt_counts.RData')
+load('metadataCOADunificada.RData')
+load('pca_res_iso_corrected.RData')
+load('pca_res_gene_corrected.RData')
+load('corrected_iso_counts.RData')
+load('corrected_gene_counts.RData')
+```
+
+
+Batch correction
+
+```{r, eval = FALSE}
+# Convert counts to a DESeq2 dataset (required for ComBat-seq)
+
+dds_gene<- DESeqDataSetFromMatrix(countData = geneExp_filt_counts, 
+                              colData = metadataCOADunificada,
+                              design = ~ proyecto + tipo_tejido)
+```
+
+
+```{r, eval = FALSE}
+# Apply ComBat-seq batch correction
+corrected_gene_counts <- ComBat_seq(counts(dds_gene), batch=metadataCOADunificada$proyecto,
+                         group =  metadataCOADunificada$tipo_tejido)
+
+```
+
+PCA of corrected iso counts
+
+```{r, eval = FALSE}
+tpm_gene_matrix_corrected <- apply(corrected_gene_counts, 2, function(x) (x / sum(x)) * 1e6)  
+data_pca_gene_corrected <-  log2(tpm_gene_matrix_corrected + 1)  # Log-transformar
+```
+
+```{r, eval = FALSE}
+pca_res_gene_corrected <- prcomp(t(data_pca_gene_corrected), scale. = TRUE)  
+```
+
+```{r}
+pca_gene_df_corrected <- data.frame(PC1 = pca_res_gene_corrected$x[,1],
+                                    PC2 = pca_res_gene_corrected$x[,2], 
+                                    proyecto = metadataCOADunificada$proyecto,
+                                    condicion = metadataCOADunificada$tipo_tejido)
+
+ggplot(pca_gene_df_corrected %>%
+         mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = proyecto)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```
+
+Isoformas 
+
+```{r, eval = FALSE}
+# Convert counts to a DESeq2 dataset (required for ComBat-seq)
+iso_dds <- DESeqDataSetFromMatrix(countData = round(isoData_filt_counts), 
+                              colData = metadataCOADunificada[, c('proyecto', 'tipo_tejido')], 
+                              design = ~ proyecto + tipo_tejido)
+```
+
+
+```{r, eval = FALSE}
+# Apply ComBat-seq batch correction
+corrected_iso_counts <- ComBat_seq(counts(iso_dds), batch=metadataCOADunificada$proyecto,
+                         group =  metadataCOADunificada$tipo_tejido)
+
+```
+
+PCA of corrected iso counts
+
+```{r, eval = FALSE}
+tpm_iso_matrix_corrected <- apply(corrected_iso_counts, 2,
+                                  function(x) (x / sum(x)) * 1e6)  
+data_pca_iso_corrected <- log2(tpm_iso_matrix_corrected + 1)  # Log-transformar
+```
+
+
+```{r, eval = FALSE}
+pca_res_iso_corrected <- prcomp(t(data_pca_iso_corrected), scale. = TRUE)  
+
+```
+
+```{r}
+pca_iso_df_corrected <- data.frame(PC1 = pca_res_iso_corrected$x[,1], 
+                                   PC2 = pca_res_iso_corrected$x[,2], 
+                                   proyecto = metadataCOADunificada$proyecto,
+                                   condicion = metadataCOADunificada$tipo_tejido)
+
+ggplot(pca_iso_df_corrected %>%
+         mutate(proyecto = paste(proyecto, condicion, sep = "-")),
+       aes(x = PC1, y = PC2, color = proyecto)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal() +
+  scale_color_brewer(palette = 'Dark2')
+
+```
+
+Se guardan las matrices corregidas
+
+```{r, echo = FALSE, eval = FALSE}
+save(corrected_iso_counts, 'corrected_iso_counts.RData', compress= 'xz')
+save(corrected_gene_counts, 'corrected_gene_counts.RData', compress= 'xz')
+save(data_pca_gene_corrected, 'data_pca_gene_corrected.RData', compress= 'xz')
+save(data_pca_iso_corrected, 'data_pca_iso_corrected.RData', compress= 'xz')
+# save(metadataCOADunificada, 'metadataCOADunificada.RData', compress = 'xz')
+```

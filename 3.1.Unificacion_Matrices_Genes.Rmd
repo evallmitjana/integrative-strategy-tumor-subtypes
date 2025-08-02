@@ -1,0 +1,75 @@
+---
+title: "3.1 Unificacion de Matrices de Genes y Metadata"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+Las matrices de metadatos y la lista de genes comunes se procesan
+
+_Cargar los objetos preprocesados unificados.
+_Filtrar rse_gene_coad y rse_gene_colon para quedarse solo con genes y muestras comunes.
+_Asignar nombres de columnas más legibles.
+_Obtener matrices de conteo de reads para ambos datasets.
+_Unir en una sola matriz y reordena por consistencia con metadatos y lista de genes.
+```{r, message = FALSE, warning = FALSE}
+#Carga de matrices de expresion del paso 1.1
+load("genMatrix.RData")
+
+#Carga de matrices resultantes de paso 2
+metadata_comunes <- get(load("metadataCOADunificada.RData"))
+genes_comunes <- get(load("commonGenesCOAD.RData"))
+
+rownames(rse_gene_coad) <- sub("\\.\\d+$", "", rownames(rse_gene_coad))
+rownames(rse_gene_colon) <- sub("\\.\\d+$", "", rownames(rse_gene_colon))
+
+rse_gene_coad <- rse_gene_coad[
+  genes_comunes[genes_comunes %in% rownames(rse_gene_coad)],
+  metadata_comunes$external_id[metadata_comunes$external_id %in% colnames(rse_gene_coad)]
+]
+
+rse_gene_colon <- rse_gene_colon[
+  genes_comunes[genes_comunes %in% rownames(rse_gene_colon)],
+  metadata_comunes$external_id[metadata_comunes$external_id %in% colnames(rse_gene_colon)]
+]
+
+dim(rse_gene_coad)
+dim(rse_gene_colon)
+
+colnames(rse_gene_coad) <- colData(rse_gene_coad)$`tcga.tcga_barcode`
+colnames(rse_gene_colon) <- colData(rse_gene_colon)$`gtex.sampid`
+
+read_counts_gene_coad <- recount3::compute_read_counts(rse_gene_coad)
+read_counts_gene_colon <- recount3::compute_read_counts(rse_gene_colon)
+
+read_counts_all <- cbind(
+  read_counts_gene_coad,
+  read_counts_gene_colon
+)
+
+# Reordenar filas y columnas 
+read_counts_all <- read_counts_all[
+  genes_comunes[genes_comunes %in% rownames(read_counts_all)],
+  rownames(metadata_comunes)[rownames(metadata_comunes) %in% colnames(read_counts_all)]
+]
+
+dim(read_counts_all) #MATRIZ DE GENES UNIFICADA
+
+
+
+```
+
+guardar matriz final y limpiar entorno
+```{r, message = FALSE, warning = FALSE}
+
+getwd() # muestra la carpeta actual
+gene_counts <-read_counts_all
+save(gene_counts, file = "gene_counts.RData")
+
+rm(list = setdiff(ls(), c("gene_counts", "read_counts_all", "metadata_comunes")))
+
+```
+
