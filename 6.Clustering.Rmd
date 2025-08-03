@@ -1,0 +1,236 @@
+---
+title: "6 Clustering"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+Clustering de genes
+```{r, message = FALSE, warning = FALSE}
+
+library(multiClust)
+
+load("metadataCOADunificada.RData") #Obtenida del paso 2
+
+#Matriz de expresión de genes
+load("corrected_gene_counts.RData") # Obtenida del paso 4.2
+#Matriz reducida a los genes diferencialmente expresados
+load("gen_data_deg_raw.Rdata") #Obtenida en el paso 5.1
+
+geneCounts <- corrected_gene_counts
+rm(corrected_gene_counts)
+
+data<-cpm(geneCounts)
+
+#En caso de haber valores nulos, sumarles 0.001
+data[data <= 0] <- data[data <= 0] + 0.001
+
+#Normalizar con logaritmo en base 2
+data<-t(apply(data,1,log2))
+
+#Quedarse con la muestras tumorales
+tumoralSamples <- rownames(metadataCOADunificada[metadataCOADunificada$tipo_tejido == "T",])
+data <- data[,tumoralSamples]
+
+#Reducir data a los DEG
+data<-data[rownames(gen_data_deg),]
+
+#Guardar la matriz 
+write.table(data, file = "data_C1.txt", sep = "\t", quote = FALSE)
+exp_file <- "/path/data_C1.txt"
+
+#Calcular la cantidad de genes a utilizar en el clustering
+gene_num <- number_probes(input=exp_file,
+                          data.exp=data,
+                          Fixed=NULL,
+                          Percent=NULL,
+                          Poly=NULL,
+                          Adaptive=TRUE,cutoff = 0.05)
+
+#Selección de la cantidad de genes calculada anteriormente
+rank_gen <- probe_ranking(input=exp_file,
+                          probe_number=gene_num,
+                          probe_num_selection="Adaptive_Probe_Num",
+                          data.exp=data,
+                          method="SD_Rank")
+
+#Calcular cantidad de clusters
+Nclust <- number_clusters(data.exp=rank_gen, Fixed=NULL, gap_statistic=TRUE)
+
+#Kmeans
+KMCluster <- cluster_analysis(sel.exp=rank_gen,
+                              cluster_type="Kmeans",
+                              distance=NULL,
+                              linkage_type=NULL,
+                              gene_distance=NULL,
+                              num_clusters=Nclust,
+                              data_name="C01",
+                              probe_rank="SD_Rank",
+                              probe_num_selection="Adaptive_Probe_Num",
+                              cluster_num_selection="Gap_Statistic")
+
+KMCluster01 <- as.data.frame(KMCluster)
+rank_gen_C01 <- rank_gen
+save(KMCluster01, rank_gen_C01, file = "Clustering01.RData")
+
+```
+
+Clustering de genes + isoformas
+```{r, message = FALSE, warning = FALSE}
+
+#Matriz de expresión de isoformas
+load("isoData_f_cpm.RData") # Obtenida del paso 5.2
+#Matriz de expresión de isoformas reducida a los genes con splicing diferencial
+load("isoData_DSG.RData") #Obtenida en el paso 5.2
+
+isoCounts_f_cpm <- corrected_iso_counts_fmi_cpm
+rm(corrected_iso_counts_fmi_cpm)
+
+data<-rbind(cpm(geneCounts),isoCounts_f_cpm)
+
+#En caso de haber valores nulos, sumarles 0.001
+data[data <= 0] <- data[data <= 0] + 0.001
+
+#Normalizar con logaritmo en base 2
+data<-t(apply(data,1,log2))
+
+#Quedarse con la muestras tumorales
+data <- data[,tumoralSamples]
+
+#Reducir data a los DEG y DSG
+rows_c2 <- c(rownames(gen_data_deg), rownames(isoData_DSG))
+data<-data[rows_c2,]
+
+#Guardar la matriz 
+write.table(data, file = "data_C2.txt", sep = "\t", quote = FALSE)
+exp_file <- "/path/data_C2.txt"
+
+#Calcular la cantidad de genes e isoformas a utilizar en el clustering
+gene_num <- number_probes(input=exp_file,
+                          data.exp=data,
+                          Fixed=NULL,
+                          Percent=NULL,
+                          Poly=NULL,
+                          Adaptive=TRUE,cutoff = 0.05)
+
+#Selección de la cantidad de genes e isoformas calculada anteriormente
+rank_gen <- probe_ranking(input=exp_file,
+                          probe_number=gene_num,
+                          probe_num_selection="Adaptive_Probe_Num",
+                          data.exp=data,
+                          method="SD_Rank")
+
+#Explorar proporciones de genes e isoformas seleccionadas
+cant_genes <- sum(grepl("^ENSG", rownames(rank_gen)))
+cant_iso <- sum(grepl("^ENST", rownames(rank_gen)))
+
+#Calcular cantidad de clusters
+Nclust <- number_clusters(data.exp=rank_gen, Fixed=NULL, gap_statistic=TRUE)
+
+#Kmeans
+KMCluster <- cluster_analysis(sel.exp=rank_gen,
+                              cluster_type="Kmeans",
+                              distance=NULL,
+                              linkage_type=NULL,
+                              gene_distance=NULL,
+                              num_clusters=Nclust,
+                              data_name="C02",
+                              probe_rank="SD_Rank",
+                              probe_num_selection="Adaptive_Probe_Num",
+                              cluster_num_selection="Gap_Statistic")
+
+KMCluster02 <- as.data.frame(KMCluster)
+rank_gen_C02 <- rank_gen
+save(KMCluster02, rank_gen_C02, file = "Clustering02.RData")
+
+```
+
+
+Consenso entre ambos resultados de clustering para obtener una nueva clasificación que contemple el efecto del splicing
+```{r, message = FALSE, warning = FALSE}
+setwd("/home/eliana/Documentos/tesina_2025/COAD")
+load("Clustering01_150725.RData")
+load("Clustering02_150725.RData")
+
+table(rownames(KMCluster01) == rownames(KMCluster02)) #MISMO ORDEN
+
+#Unificar resultados de kmeans
+kmeans <- cbind(rownames(KMCluster01), KMCluster01, KMCluster02$KMCluster)
+colnames(kmeans) <- c("barcode", "C01","C02")
+
+nSamples = length(tumoralSamples)
+  
+#Matriz de concurrencia
+zeros<-c(rep(0,(nSamples*nSamples)))
+M<-matrix(zeros,nrow = nSamples)
+colnames(M)<-kmeans$barcode
+rownames(M)<-kmeans$barcode
+
+#Puntaje
+n <- nrow(kmeans)
+for (i in 1:(n - 1)) {
+  for (j in (i + 1):n) {
+    if (kmeans$C01[i] == kmeans$C01[j]) M[i, j] <- M[i, j] + 1
+    if (kmeans$C02[i] == kmeans$C02[j]) M[i, j] <- M[i, j] + 1
+  }
+}
+
+#obtener los grupos de pares
+red<-M
+rownames(red)<-c(1:nSamples)
+colnames(red)<-c(1:nSamples)
+n1<-as.numeric()
+n2<-as.numeric()
+for (f in 1:(nSamples-1)) {
+  for (c in (f+1):nSamples) {
+    if(red[f,c]==2){
+      n1<-c(n1,f)
+      n2<-c(n2,c)}}}
+pares<-data.frame(n1,n2)
+n2<-unique(n2)
+drop<-as.numeric()
+for (i in 1:dim(pares)[1]) {
+  for (j in 1:length(n2)) {
+    if(pares[i,1]==n2[j])
+      drop<-c(drop,i)
+  }
+}
+pares<-pares[-drop,] #eliminación de pares redundantes
+
+g<-unique(pares[,1]) #grupos resultantes: c1 vs vc2  
+sumg<-c(rep(1,length(g))) #contar el paciente que agrupa.
+for (i in 1:length(g)) {
+  for (j in 1:dim(pares)[1]) {
+    if(pares[j,1]==g[i])
+      sumg[i]<-sumg[i]+1
+  }
+}
+g<-data.frame(id_grupo=g,cantidad=sumg)
+g<-g[order(g$cantidad,decreasing = TRUE),]
+
+g <- g[g$cantidad >= round(nSamples*0.05), ] #CRITERIO DE CORTE
+
+#Generar subtipos
+library(dplyr)
+g <- g %>% arrange(id_grupo)  #Mantener orden
+subtypes <- as.character(as.roman(1:nrow(g))) # Generar nombres de subtipos
+kgrupos <- unlist(mapply(function(sub, cant) rep(sub, cant), subtypes, g$cantidad))
+
+# Generar nombres de muestras
+pac <- g$id_grupo
+pac_names <- character()
+for (j in seq_along(pac)) {
+  pac_names <- c(pac_names, rownames(M)[pac[j]])
+  pac_names <- c(pac_names, rownames(M)[pares[pares[,1] == pac[j], 2]])
+}
+
+#Asignar los subtipos a las muestras
+newkmeans <- data.frame(barcode = pac_names, group = kgrupos)
+save(newkmeans, file = "consenso_sampleGroup.RData") 
+
+```
+
