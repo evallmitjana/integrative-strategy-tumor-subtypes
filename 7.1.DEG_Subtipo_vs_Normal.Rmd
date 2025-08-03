@@ -1,0 +1,110 @@
+---
+title: "7.1 Expresión Diferencial en Genes - Subtipo vs Normal"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+Actualización de la metadata para asignar los subtipos a las muestras
+```{r, message = FALSE, warning = FALSE}
+load("consenso_sampleGroup.RData") #Obtenido del paso 6
+load("metadataCOADunificada.RData") # Obtenida del paso 2
+md <- metadataCOADunificada
+newkmeans$barcode <- gsub("\\.", "-", newkmeans$barcode)
+
+md_normal <- md[md$tipo_tejido == "N", ]
+normalSamples <- data.frame(
+  barcode = rownames(md_normal),
+  group   = rep("N", nrow(md_normal))
+)
+
+newkmeans <- rbind(newkmeans, normalSamples)
+md <- md[newkmeans$barcode,]
+md <- md[match(newkmeans$barcode, rownames(md)), ]
+md <- cbind(md,subtype = newkmeans$group)
+rm(metadataCOADunificada,normalSamples,newkmeans)
+```
+
+Expresión diferencial de genes, contrastando cada subtipo con las muestras normales
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+library(dplyr)
+library(edgeR)
+load("corrected_gene_counts.RData")
+genMatrix <- as.data.frame(corrected_gene_counts)
+genMatrix <- genMatrix[,rownames(md)]
+
+subtypes <- unique(md$subtype)
+subtypes <- subtypes[!grepl('N',subtypes)]
+
+md %>% 
+  filter(subtype == 'N') %>% 
+  rownames() -> NSamples
+
+DEGRes <- list()
+for (i in 1:length(subtypes)) {
+  md %>% 
+    filter(subtype == subtypes[i]) %>% 
+    rownames() -> TSamples
+  set.seed(i) # Para cada contraste, se genera un set de muestras normales aleatorias, equivalente a la cantidad de muestras tumorales del subtipo
+  NSamples_i <- sample(NSamples, size = length(TSamples))
+  gene_i <- genMatrix[, c(TSamples,NSamples_i)]
+  md[c(TSamples,NSamples_i), 'subtype', drop=F] -> md_i
+  names(md_i)[1] <- 'condition'
+  md_i$condition <- factor(md_i$condition,
+                           levels = c('N', subtypes[i]),
+                           labels = c('Normal', paste('Tumoral_', subtypes[i], sep ='')))
+  md_i$samples <- rownames(md_i)
+  genDGE_i <- DGEList(counts = gene_i)
+  
+  #Filtrado por expresion
+  CPMscale <- 10^6
+  median_libSize <- median(colSums(gene_i))
+        
+  keep <- filterByExpr(genDGE_i,
+                       group = md_i$condition,
+                       min.count = floor(median_libSize/CPMscale),
+                       large.n = 25,
+                       min.prop = 0.1)
+  
+  genDGE_i <- genDGE_i[keep, , keep.lib.sizes = FALSE]
+  
+  condition<-as.character(md_i$condition)
+  mdesign <- model.matrix(~0+condition)
+
+  genDGE_i <- DGEList(counts=genDGE_i$counts, group=condition)
+  genDGE_i <- calcNormFactors(genDGE_i, method="TMM")
+  genDGE_i <- estimateDisp(genDGE_i, mdesign)
+  
+  #Expresion diferencial
+  fit <- glmFit(genDGE_i, mdesign)
+  x_i <- glmLRT(fit,contrast = c(-1,1))
+  x_i<-topTags(x_i, n=nrow(genDGE$counts), adjust.method = "fdr")[[1]]
+  x_i$AbslogFC<-abs(x_i$logFC)
+  x_i<-x_i[x_i$FDR < 0.05,]
+  x_i<-x_i[x_i$AbslogFC>2,]
+  
+  x_i -> DEGRes[[subtypes[i]]]
+  save(DEGRes, file = 'DEGRes_SubtipeVsN.RData', compress = 'xz')
+  print(paste('subtype ', i, ' done', sep =''))
+}
+
+# Crear lista de genes por subtipo
+geneList <- lapply(DEGRes, rownames)
+
+# Obtener genes exclusivos de cada subtipo
+exclusiveDEG <- lapply(seq_along(geneList), function(i) {
+  other_genes <- unlist(geneList[-i]) # genes de los demás contrastes
+  setdiff(geneList[[i]], other_genes) # Exclusivos del subtipo i
+})
+
+# Asignar nombres a las listas de genes característicos de cada subtipo
+names(exclusiveDEG) <- paste0("s", seq_along(exclusiveDEG), "_exclusiveDEG")
+
+save(exclusiveDEG, file = "exclusiveDEGxSubtype.RData")
+
+```
+

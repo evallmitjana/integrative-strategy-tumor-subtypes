@@ -1,0 +1,129 @@
+---
+title: "7.2 Expresión Diferencial en Isoformas - Subtipo vs Normal"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+library(NBSplice)
+library("BiocParallel")
+library(batchtools)
+library(dplyr)
+
+load("geneIso_f.RData") #Obtenido del paso 4.1
+load("corrected_iso_counts.RData") #Obtenido del paso 4.2
+load('consenso_sampleGroup.RData') #Obtenido del paso 6
+
+load("metadataCOADunificada.RData") #Obtenido del paso 2
+
+newkmeans$barcode <- gsub("\\.", "-", newkmeans$barcode)
+normalSamples <- data.frame(barcode = rownames(metadataCOADunificada)[metadataCOADunificada$tipo_tejido =='N'], group='N')
+
+
+newkmeans <- rbind(newkmeans, normalSamples)
+metadataCOADunificada <- metadataCOADunificada[newkmeans[,'barcode'],] 
+metadataCOADunificada[,'subtype'] <- newkmeans[,'group']
+                      
+subtypes <- unique(metadataCOADunificada$subtype)
+
+subtypes <- subtypes[!grepl('N',subtypes)]
+
+subtypes
+# [1] "I"    "II"   "III"  "IV"   "V"    "VI"   "VII"  "VIII" "IX"  
+
+# muestras normales
+metadataCOADunificada %>% 
+  filter(subtype == 'N') %>% 
+  rownames() -> NSamples
+
+DSRes <- list()
+for (i in 2:length(subtypes)) {
+  metadataCOADunificada %>% 
+    filter(subtype == subtypes[i]) %>% 
+    rownames() -> TSamples
+  # muestras normales
+  set.seed(i)
+  NSamples_i <- sample(NSamples, size = length(TSamples))
+  iso <- corrected_iso_counts[, c(TSamples,NSamples_i)]
+  metadataCOADunificada[c(TSamples,NSamples_i), 'subtype', drop=F] -> md
+  names(md)[1] <- 'condition'
+  md$condition <- factor(md$condition, levels = c('N', subtypes[i]),
+                         labels = c('Normal', paste('Tumoral_', subtypes[i],
+                                                    sep ='')))
+  md$samples <- rownames(md)
+  # filter isoforms that have zero expression across all samples
+  iso <- iso[rowSums(iso) >0,]
+  geneIso_f_mi <- geneIso_f[geneIso_f$transcript_id %in% rownames(iso),]
+  names(geneIso_f_mi)[2] <- 'isoform_id'
+  
+  myIsoDataSet<-IsoDataSet(iso, md, "condition",
+                           geneIso_f_mi,
+                           BPPARAM = SnowParam(workers = 48, type = "SOCK"))
+  myIsoDataSet <- buildLowExpIdx(myIsoDataSet, "condition", ratioThres = 0.01, 
+                                 countThres = 1,
+                                 BPPARAM = SnowParam(workers = 48, type = "SOCK"))
+  myDSResults <- NBTest(myIsoDataSet, colName = "condition", test = "F", 
+                        BPPARAM = SnowParam(workers = 48, type = "SOCK"))
+  
+  GetDSResults(myDSResults) -> DSRes[[subtypes[i]]]
+  save(DSRes, file = 'DSRes_SubtipeVsN.RData', compress = 'xz')
+  print(paste('subtype ', i, ' done', sep =''))
+  rm(myIsoDataSet)
+  gc()
+}
+
+
+
+
+setwd("/home/eliana/Documentos/tesina_2025/COAD")
+load("DSRes_SubtipeVsN.RData")
+
+subtipos <- names(DSRes)
+
+# Lista donde guardaremos los genes por subtipo
+listas <- vector("list", length(subtipos))
+names(listas) <- subtipos
+
+# Procesar cada subtipo con un for
+for (i in seq_along(subtipos)) {
+  subtipo <- subtipos[i]
+  ds <- DSRes[[subtipo]]
+  
+  # Filtrar por FDR
+  ds <- ds[ds$geneFDR < 0.05, ]
+  
+  # Detectar la columna ratio_Tumoral correspondiente
+  col_tumoral <- grep("^ratio_Tumoral", colnames(ds), value = TRUE)
+  
+  # Calcular cambio absoluto y filtrar
+  ds$absChange <- abs(ds$ratio_Normal - ds[[col_tumoral]])
+  ds <- ds[ds$absChange > 0.05, ]
+  
+  # Guardar genes únicos en la lista
+  listas[[i]] <- unique(ds$gene)
+}
+
+# Ahora calculamos los genes exclusivos de cada subtipo
+exclusiveDS <- vector("list", length(listas))
+names(exclusiveDS) <- paste0("s", seq_along(listas), "_exclusiveDS")
+
+for (i in seq_along(listas)) {
+  other_genes <- unlist(listas[-i])  # todos los genes menos el actual
+  exclusiveDS[[i]] <- setdiff(listas[[i]], other_genes)
+}
+
+#save
+
+
+```
+
+
+
+
+
