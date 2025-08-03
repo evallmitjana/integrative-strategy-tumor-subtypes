@@ -3,8 +3,8 @@ Este repositorio contiene un pipeline reproducible en R para el análisis de exp
 Estructura del pipeline
 El análisis está organizado en múltiples scripts .Rmd, cada uno correspondiente a una etapa del flujo de trabajo:
 
-1. Preprocesamiento y descarga de datos
- 1.1.Descarga_Genes_Metadata.Rmd
+1- Preprocesamiento y descarga de datos
+ 1.1 Descarga_Genes_Metadata.Rmd
   Descarga los objetos RSE para genes de TCGA-COAD y GTEx-Colon.
   Limpieza de duplicados, filtrado de metadatos y creación de tablas clínicas.
   
@@ -12,15 +12,10 @@ El análisis está organizado en múltiples scripts .Rmd, cada uno correspondien
   Datos descargados desde recount3 para proyectos COAD (TCGA) y Colon (GTEx).
   
   Output:
-  
   rse_gene_coad y rse_gene_colon (objetos SummarizedExperiment)
-  
   metadata_coad.RData
-  
   metadata_colon.RData
-  
   genMatrix.RData
-  
   genes_recount.RData (lista de genes en común)
 
 1.2.Descarga_Isoformas.Rmd
