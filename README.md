@@ -28,7 +28,7 @@ Descarga los objetos RSE para genes de TCGA-COAD y GTEx-Colon. Limpieza de dupli
 
 **Output:**
 
-- `rse_gene_coad`, `rse_gene_colon` (SummarizedExperiment)
+- `rse_gene_coad`, `rse_gene_colon` [SummarizedExperiment](https://bioconductor.org/packages/devel/bioc/manuals/SummarizedExperiment/man/SummarizedExperiment.pdf)
 - `metadata_coad.RData`
 - `metadata_colon.RData`
 - `genMatrix.RData`
