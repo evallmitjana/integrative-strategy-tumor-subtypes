@@ -1,18 +1,24 @@
 # integrative-strategy-tumor-subtypes
 
-Este repositorio contiene un pipeline reproducible en R para el análisis de expresión diferencial y exploración transcriptómica entre muestras tumorales de colon (proyecto TCGA-COAD) y muestras normales de colon (GTEx), utilizando datos descargados desde el recurso **recount3**. El enfoque es en capas, abordando tanto expresión génica como isoformas, con el objetivo de identificar patrones transcriptómicos característicos de distintos subtipos tumorales.
+Este repositorio contiene un flujo de análisis  en R para la identificación de potenciales subtipos tumorales a partir del análisis de expresión diferencial de genes y splicing diferencial. Este flujo de análisis se ha aplicado al estudio de cáncer colon mediante el procesamiento de datos transcriptómicos de  muestras tumorales  provenientes del proyecto [TCGA-COAD](https://portal.gdc.cancer.gov/projects/TCGA-COAD) y muestras de tejido sano de [GTEx](https://gtexportal.org/home/)
+. Los datos utilizados han sido uniformemente procesados y están libremente disponibles en el repositorio**recount3**. El enfoque de análisis es integrativo, combinando el estudio de  tanto expresión génica como isoformas, con el objetivo de identificar patrones transcriptómicos característicos de distintos subtipos tumorales.
+
 
 ---
 
 ## Estructura del pipeline
 
-El análisis está organizado en múltiples scripts `.Rmd`, cada uno correspondiente a una etapa del flujo de trabajo:
+El análisis involucra diferentes etapas, cada una de las cuales ha sido implementada en forma independiente. Este repositorio contiene los correspondientes scripts en formato R notebook (`.Rmd`)  para su reutilización. 
+
+Etapas de análisis:
 
 ---
 
 ### 1. Preprocesamiento y descarga de datos
 
 #### 1.1 Descarga_Genes_Metadata.Rmd
+
+Se trabaja con objetos de la clase RangedSummarizedExperiment (RSE). Se trata de un contenedor de Bioconductor que integra en un solo objeto las matrices de conteos, los metadatos de las muestras y la anotación genómica.
 
 Descarga los objetos RSE para genes de TCGA-COAD y GTEx-Colon. Limpieza de duplicados, filtrado de metadatos y creación de tablas clínicas.
 
