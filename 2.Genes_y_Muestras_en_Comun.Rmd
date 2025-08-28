@@ -12,7 +12,7 @@ Cargar matrices de metadata obtenidas del paso 1.1
 ```{r, message = FALSE, warning = FALSE}
 
 load("metadata_coad.RData")
-load("metadata_colon_v1.RData")
+load("metadata_colon.RData")
 
 metadata_interes_coad <- data.frame(metadata_interes_coad)
 metadata_interes_colon <- data.frame(metadata_interes_colon)
