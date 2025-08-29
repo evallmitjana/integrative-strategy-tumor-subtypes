@@ -28,7 +28,7 @@ Descarga los objetos RSE para genes de TCGA-COAD y GTEx-Colon. Limpieza de dupli
 
 **Output:**
 
-- `genMatrix.RData`: contiene `rse_gene_coad`, `rse_gene_colon` que son objetos [SummarizedExperiment](https://bioconductor.org/packages/devel/bioc/manuals/SummarizedExperiment/man/SummarizedExperiment.pdf) para muestras tumorales de COAD y COLON.
+- `genMatrix.RData`: contiene los objetos `rse_gene_coad`, `rse_gene_colon`, ambos del tipo [SummarizedExperiment](https://bioconductor.org/packages/devel/bioc/manuals/SummarizedExperiment/man/SummarizedExperiment.pdf) para muestras tumorales de COAD y COLON.
 - `metadata_coad.RData`: dataframe con metadatos biológicos y clínicos de COAD (ej. sexo, edad, tejido, estado tumoral).
 - `metadata_colon.RData`: dataframe con metadatos de GTEx Colon (ej. sexo, tipo de tejido, edad).
 - `genes_recount.RData`: lista de genes comunes presentes en ambos proyectos dentro de recount (COAD-COLON)
@@ -45,8 +45,8 @@ Carga los objetos RSE a nivel de isoformas para los mismos proyectos. Aplica los
 
 **Output:**
 
-- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon --> REVISAR: ELI DOWNLOAD DATA
-- `genesFromIso.RData`:
+- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon **--> REVISAR: ELI DOWNLOAD DATA**
+- `genesFromIso.RData`: conjunto de genes obtenidos a partir de las matrices de isoformas.
 
 ---
 
@@ -58,12 +58,12 @@ Unifica los metadatos de TCGA y GTEx. Identifica las muestras y genes presentes 
 
 **Input:**
 
-- `metadata_coad.RData`
-- `metadata_colon.RData`
-- `GTex_Colon_iso.gct`
-- `TCGA_COAD_counts.tsv.gz`
-- `genes_recount.RData`
-- `genesFromIso.RData`
+- `metadata_coad.RData`: dataframe con metadatos biológicos y clínicos de COAD (ej. sexo, edad, tejido, estado tumoral) (output: 1.1).
+- `metadata_colon.RData`: dataframe con metadatos de GTEx Colon (ej. sexo, tipo de tejido, edad) (output: 1.1).
+- `GTex_Colon_iso.gct`: (output: 1.2)
+- `TCGA_COAD_counts.tsv.gz`: 
+- `genes_recount.RData`: lista de genes en común identificados desde recount3 a nivel génico.
+- `genesFromIso.RData`: conjunto de genes obtenidos a partir de las matrices de isoformas.
 
 **Output:**
 
@@ -80,9 +80,9 @@ Filtra los objetos RSE de expresión génica para conservar solo genes y muestra
 
 **Input:**
 
-- `genMatrix.RData`: matriz inicial de conteos de genes (rse_gene_coad, rse_gene_coad)
-- `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx.
-- `commonGenesCOAD.RData`: conjunto de genes presentes en ambos proyectos.
+- `genMatrix.RData`: matriz inicial de conteos de genes (rse_gene_coad, rse_gene_coad) (output: 1.1).
+- `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
+- `commonGenesCOAD.RData`: conjunto de genes presentes en ambos proyectos (output: 2).
 
 **Output:**
 
@@ -94,14 +94,14 @@ Une las matrices de expresión de isoformas (TCGA y GTEx) con nombres armonizado
 
 **Input:**
 
-- `metadataCOADunificada.RData`
-- `commonGenesCOAD.RData`
+- `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
+- `commonGenesCOAD.RData`: conjunto de genes presentes en ambos proyectos (output: 2).
 - `TCGA_COAD_counts.tsv.gz`
-- `GTex_Colon_iso.gct`
+- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon (output: 1.2).
 
 **Output:**
 
-- `COAD_isoData_unificada.RData`
+- `COAD_isoData_unificada.RData`: 
 
 ---
 
@@ -113,16 +113,13 @@ Explora la expresión génica e isoforme con PCA y filtros por baja expresión. 
 
 **Input:**
 
-- `gene_counts.RData`
-- `COAD_isoData_unificada.RData`
-- `metadataCOADunificada.RData`
+- `gene_counts.RData`: matriz de conteos genes (output: 3.1).
+- `COAD_isoData_unificada.RData`: matriz de conteos de isoformas (output: 3.2).
+- `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
 
 **Output:**
 
-- `geneExp_filt_counts.RData`
-- `isoData_filt_counts.RData`
 - `geneIso_f.RData`
-- `pca_res_gene.RData`, `pca_res_iso.RData`
 
 #### 4.2 Correccion_Efecto_Batch.Rmd
 
@@ -130,9 +127,9 @@ Corrige por batch usando ComBat-seq y evalúa por PCA.
 
 **Input:**
 
-- `geneExp_filt_counts.RData`
-- `isoData_filt_counts.RData`
-- `metadataCOADunificada.RData`
+- `geneExp_filt_counts.RData` *********(output: 4.1, generado en script pero no guardado explícitamente, disponible en sesión)
+- `isoData_filt_counts.RData` **********(output: 4.1, idem anterior).
+- `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
 
 **Output:**
 
@@ -153,8 +150,8 @@ Análisis de expresión diferencial con `edgeR`. Selección por FDR < 0.01 y |lo
 
 **Input:**
 
-- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch.
-- `metadataCOADunificada.RData`: metadatos integrados.
+- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch (output: 4.2).
+- `metadataCOADunificada.RData`: metadatos integrados (output: 2).
 
 **Output:**
 
@@ -167,9 +164,9 @@ Identifica genes con splicing diferencial con `NBSplice`.
 
 **Input:**
 
-- `geneIso_f.RData`
-- `corrected_iso_counts.RData`: matriz de isoformas corregida por batch.
-- `metadataCOADunificada.RData`: metadatos integrados de TCGA-COAD y GTEx-Colon.
+- `geneIso_f.RData`: (output: 4.1)
+- `corrected_iso_counts.RData`: matriz de isoformas corregida por batch (output: 4.2).
+- `metadataCOADunificada.RData`: metadatos integrados de TCGA-COAD y GTEx-Colon (output: 2).
 
 **Output:**
 
@@ -184,11 +181,11 @@ Agrupa muestras tumorales usando matrices de expresión de genes y/o isoformas, 
 
 **Input:**
 
-- `metadataCOADunificada.RData`: metadatos integrados.
-- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch.
-- `gen_data_deg_raw.RData`
-- `isoData_f_cpm.RData`
-- `isoData_DSG.RData`
+- `metadataCOADunificada.RData`: metadatos integrados (output: 2).
+- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch (output: 4.2).
+- `gen_data_deg_raw.RData`: (output: 5.1) 
+- `isoData_f_cpm.RData`: (output: 5.2)
+- `isoData_DSG.RData`: (output: 5.2)
 
 **Output:**
 
@@ -206,9 +203,9 @@ Realiza DEG para cada subtipo vs muestras normales.
 
 **Input:**
 
-- `metadataCOADunificada.RData`: metadatos integrados.
-- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch.
-- `consenso_sampleGroup.RData`
+- `metadataCOADunificada.RData`: metadatos integrados (output: 2).
+- `corrected_gene_counts.RData`: matriz de conteos de genes corregida por batch (output: 4.2).
+- `consenso_sampleGroup.RData`: (output: 6)
 
 **Output:**
 
@@ -221,10 +218,10 @@ Análisis de splicing diferencial entre subtipos y normales. Filtra por FDR y ca
 
 **Input:**
 
-- `geneIso_f.RData`
-- `corrected_iso_counts.RData`: matriz de conteos de isoformas corregida por batch.
-- `consenso_sampleGroup.RData`
-- `metadataCOADunificada.RData`: metadatos integrados.
+- `geneIso_f.RData`: (output: 4.1)
+- `corrected_iso_counts.RData`: matriz de conteos de isoformas corregida por batch (output: 4.2).
+- `consenso_sampleGroup.RData`: (output: 6)
+- `metadataCOADunificada.RData`: metadatos integrados (output: 2).
 
 **Output:**
 
