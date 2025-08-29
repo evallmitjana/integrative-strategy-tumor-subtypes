@@ -45,7 +45,7 @@ Carga los objetos RSE a nivel de isoformas para los mismos proyectos. Aplica los
 
 **Output:**
 
-- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon **--> REVISAR: ELI DOWNLOAD DATA**
+- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon **************** **--> REVISAR: ELI DOWNLOAD DATA**
 - `genesFromIso.RData`: conjunto de genes obtenidos a partir de las matrices de isoformas.
 
 ---
