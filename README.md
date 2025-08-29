@@ -119,7 +119,7 @@ Explora la expresión génica e isoforme con PCA y filtros por baja expresión. 
 
 **Output:**
 
-- `geneIso_f.RData`
+- `geneIso_f.RData`: matriz de relación gen-isoforma.
 - `geneExp_filt_counts.RData`: matriz filtrada de genes.
 - `isoData_filt_counts.RData`: matriz filtrada de isoformas.
 
