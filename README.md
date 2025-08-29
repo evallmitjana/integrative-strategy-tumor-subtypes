@@ -120,6 +120,8 @@ Explora la expresión génica e isoforme con PCA y filtros por baja expresión. 
 **Output:**
 
 - `geneIso_f.RData`
+- `geneExp_filt_counts.RData`
+- `isoData_filt_counts.RData`
 
 #### 4.2 Correccion_Efecto_Batch.Rmd
 
@@ -127,8 +129,8 @@ Corrige por batch usando ComBat-seq y evalúa por PCA.
 
 **Input:**
 
-- `geneExp_filt_counts.RData` *********(output: 4.1, generado en script pero no guardado explícitamente, disponible en sesión)
-- `isoData_filt_counts.RData` **********(output: 4.1, idem anterior).
+- `geneExp_filt_counts.RData`: (output: 4.1)
+- `isoData_filt_counts.RData`: (output: 4.1).
 - `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
 
 **Output:**
