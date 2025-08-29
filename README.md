@@ -157,8 +157,8 @@ Análisis de expresión diferencial con `edgeR`. Selección por FDR < 0.01 y |lo
 
 **Output:**
 
-- `gen_data_deg_raw.RData`
-- `res_signif` (data.frame interno)
+- `gen_data_deg_raw.RData`: tabla completa de resultados DEG.
+- `res_signif`: genes significativos (filtrados por FDR/logFC).
 
 #### 5.2 Genes_con_splicing_diferencial.Rmd
 
