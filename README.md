@@ -60,8 +60,8 @@ Unifica los metadatos de TCGA y GTEx. Identifica las muestras y genes presentes 
 
 - `metadata_coad.RData`: dataframe con metadatos biológicos y clínicos de COAD (ej. sexo, edad, tejido, estado tumoral) (output: 1.1).
 - `metadata_colon.RData`: dataframe con metadatos de GTEx Colon (ej. sexo, tipo de tejido, edad) (output: 1.1).
-- `GTex_Colon_iso.gct`: (output: 1.2)
-- `TCGA_COAD_counts.tsv.gz`: 
+- `GTex_Colon_iso.gct`: matriz de expresión de isoformas para muestras del proyecto GTEx (output: 1.2).
+- `TCGA_COAD_counts.tsv.gz`: matriz de expresión de isoformas para muestras del proyecto TCGA.
 - `genes_recount.RData`: lista de genes en común identificados desde recount3 a nivel génico.
 - `genesFromIso.RData`: conjunto de genes obtenidos a partir de las matrices de isoformas.
 
@@ -96,7 +96,7 @@ Une las matrices de expresión de isoformas (TCGA y GTEx) con nombres armonizado
 
 - `metadataCOADunificada.RData`: metadatos combinados de TCGA y GTEx (output: 2).
 - `commonGenesCOAD.RData`: conjunto de genes presentes en ambos proyectos (output: 2).
-- `TCGA_COAD_counts.tsv.gz`
+- `TCGA_COAD_counts.tsv.gz`: matriz de expresión de isoformas para muestras del proyecto TCGA.
 - `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon (output: 1.2).
 
 **Output:**
@@ -172,8 +172,8 @@ Identifica genes con splicing diferencial con `NBSplice`.
 
 **Output:**
 
-- `isoData_DSG.RData`
-- `isoData_f_cpm.RData`
+- `isoData_DSG.RData`: contiene la matriz de isoformas corregida, reducida a los transcriptos correspondientes a los genes con scpling diferencial, y una matriz de relación iso-gen.
+- `isoData_f_cpm.RData`: matriz de isoformas corregida, escalada en cpm
 
 ---
 
