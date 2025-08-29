@@ -39,13 +39,13 @@ Carga los objetos RSE a nivel de isoformas para los mismos proyectos. Aplica los
 
 **Input:**
 
-- `GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_expected_count.gct.gz`
-- `GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt`
-- `TCGA_COAD_counts.tsv.gz`
+- `GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_expected_count.gct.gz`: descargado de [GTEx Portal](https://www.gtexportal.org/home/downloads/adult-gtex/bulk_tissue_expression)
+- `GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt`: descargado de [GTEx Portal](https://gtexportal.org/home/downloads/adult-gtex/metadata)
+- `TCGA_COAD_counts.tsv.gz`: descargado de [Repositorio TCGA](https://osf.io/gqrz9/files/osfstorage#)
 
 **Output:**
 
-- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon **************** **--> REVISAR: ELI DOWNLOAD DATA**
+- `GTex_Colon_iso.gct`: conteos esperados de los transcriptos, para tejido normal de colon
 - `genesFromIso.RData`: conjunto de genes obtenidos a partir de las matrices de isoformas.
 
 ---
@@ -101,7 +101,7 @@ Une las matrices de expresión de isoformas (TCGA y GTEx) con nombres armonizado
 
 **Output:**
 
-- `COAD_isoData_unificada.RData`: 
+- `COAD_isoData_unificada.RData`: matriz de conteos de isoformas unificada (isoformas correspondientes a los genes en común × muestras comunes).
 
 ---
 
@@ -179,7 +179,7 @@ Identifica genes con splicing diferencial con `NBSplice`.
 
 ### 6. Clustering
 
-Agrupa muestras tumorales usando matrices de expresión de genes y/o isoformas, y combina ambos resultados en un consenso.
+Agrupa muestras tumorales medinate k means, usando matrices de expresión de genes y/o isoformas, y combinando ambos resultados en un consenso.
 
 **Input:**
 
@@ -191,9 +191,9 @@ Agrupa muestras tumorales usando matrices de expresión de genes y/o isoformas, 
 
 **Output:**
 
-- `Clustering01.RData`
-- `Clustering02.RData`
-- `consenso_sampleGroup.RData`
+- `Clustering01.RData`: agrupamiento basado en genes
+- `Clustering02.RData`: agrupamiento basado en genes e isoformas
+- `consenso_sampleGroup.RData`: relacion entre muestras y nuevo grupo asignado
 
 ---
 
