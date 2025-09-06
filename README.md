@@ -1,7 +1,7 @@
 # integrative-strategy-tumor-subtypes
 
 Este repositorio contiene un flujo de análisis  en R para la identificación de potenciales subtipos tumorales a partir del análisis de expresión diferencial de genes y splicing diferencial. Este flujo de análisis se ha aplicado al estudio de cáncer colon mediante el procesamiento de datos transcriptómicos de  muestras tumorales  provenientes del proyecto [TCGA-COAD](https://portal.gdc.cancer.gov/projects/TCGA-COAD) y muestras de tejido sano de [GTEx](https://gtexportal.org/home/)
-. Los datos utilizados han sido uniformemente procesados y están libremente disponibles en el repositorio **recount3**. El enfoque de análisis es integrativo, combinando el estudio de  tanto expresión génica como isoformas, con el objetivo de identificar patrones transcriptómicos característicos de distintos subtipos tumorales.
+. Los datos utilizados han sido uniformemente procesados y están libremente disponibles en el repositorio [recount3](https://rna.recount.bio). El enfoque de análisis es integrativo, combinando el estudio de  tanto expresión génica como isoformas, con el objetivo de identificar patrones transcriptómicos característicos de distintos subtipos tumorales.
 
 
 ---
